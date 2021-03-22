@@ -44,6 +44,7 @@ namespace ToDoList.Controllers
       var currentUser = await _userManager.FindByIdAsync(userId);
       item.User = currentUser;
       _db.Items.Add(item);
+      _db.SaveChanges();
       if (CategoryId != 0)
       {
           _db.CategoryItem.Add(new CategoryItem() { CategoryId = CategoryId, ItemId = item.ItemId });
