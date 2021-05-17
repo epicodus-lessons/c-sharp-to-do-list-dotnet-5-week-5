@@ -1,21 +1,31 @@
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using ToDoList.Models;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc.Rendering;
+
+//new using directives
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
+//////////////////////////////////////////////////////
+//////// Authorizing Create, Update and Delete of ItemsController.cs 
+//////////////////////////////////////////////////////
+//////// 1. Item.cs needs ApplicationUser property
+//////// 2. ItemsController.cs has various updates
+//////// 3. Views/Items/Details.cshtml has updates
+//////// 4. Views/Items/Index.cshtml has updates
+//////////////////////////////////////////////////////
+
 namespace ToDoList.Controllers
 {
-  [Authorize]
   public class ItemsController : Controller
   {
     private readonly ToDoListContext _db;
-    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager; 
 
     public ItemsController(UserManager<ApplicationUser> userManager, ToDoListContext db)
     {
@@ -23,20 +33,21 @@ namespace ToDoList.Controllers
       _db = db;
     }
 
-    public async Task<ActionResult> Index()
+    //Index Route updated to find all DB items
+    public ActionResult Index()
     {
-      var userId = this.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-      var currentUser = await _userManager.FindByIdAsync(userId);
-      var userItems = _db.Items.Where(entry => entry.User.Id == currentUser.Id).ToList();
+      List<Item> userItems = _db.Items.ToList();
       return View(userItems);
     }
 
+    //Create Route updated to Add Authorization
+    [Authorize] 
     public ActionResult Create()
     {
       ViewBag.CategoryId = new SelectList(_db.Categories, "CategoryId", "Name");
       return View();
     }
-
+    
     [HttpPost]
     public async Task<ActionResult> Create(Item item, int CategoryId)
     {
@@ -47,27 +58,59 @@ namespace ToDoList.Controllers
       _db.SaveChanges();
       if (CategoryId != 0)
       {
-          _db.CategoryItem.Add(new CategoryItem() { CategoryId = CategoryId, ItemId = item.ItemId });
+        _db.CategoryItem.Add(new CategoryItem() { CategoryId = CategoryId, ItemId = item.ItemId });
       }
       _db.SaveChanges();
       return RedirectToAction("Index");
     }
 
+    // In the Details route we need to find the user associated with the item so that in the view, we can show the edit, delete or add category links if the item "belongs" to that user. Line 93 involves checking if the userId is null: if it is null then IsCurrentUser is set to false, if is not null, then the program evaluates whether userId is equal to thisItem.User.Id and returns true if so, false if not so.
+    // Line 93 can be refactored into an if statement like so:
+    // if (userId != null) 
+    // {
+    //   if (userId == thisItem.User.Id) 
+    //   {
+    //     ViewBag.IsCurrentUser = true;
+    //   }
+    //   else
+    //   {
+    //     ViewBag.IsCurrentUser = false;
+    //   }
+    // }
+    // else 
+    // {
+    //   ViewBag.IsCurrentUser = false;
+    // }
+    // Look at the Details view and how IsCurrentUser is used to help comprehend what is happening in the conditional using the ternary operator 
     public ActionResult Details(int id)
     {
       var thisItem = _db.Items
           .Include(item => item.JoinEntities)
           .ThenInclude(join => join.Category)
+          .Include(item => item.User)
           .FirstOrDefault(item => item.ItemId == id);
+      var userId = this.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+      ViewBag.IsCurrentUser = userId != null ? userId == thisItem.User.Id : false;
       return View(thisItem);
     }
 
-    public ActionResult Edit(int id)
+    // Edit Route is updated to find the user and the item that matches the user id, then is routed based on that result. 
+    [Authorize]
+    public async Task<ActionResult> Edit(int id)
     {
-      var thisItem = _db.Items.FirstOrDefault(item => item.ItemId == id);
-      ViewBag.CategoryId = new SelectList(_db.Categories, "CategoryId", "Name");
+      var userId = this.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+      var currentUser = await _userManager.FindByIdAsync(userId);
+      var thisItem = _db.Items
+          .Where(entry => entry.User.Id == currentUser.Id)
+          .FirstOrDefault(item => item.ItemId == id);
+      if (thisItem == null)
+      {
+        return RedirectToAction("Details", new {id = id});
+      }
+      ViewBag.CategoryId = new SelectList(_db.Categories, "CategoryId", "Name"); 
       return View(thisItem);
     }
+
 
     [HttpPost]
     public ActionResult Edit(Item item, int CategoryId)
@@ -81,9 +124,19 @@ namespace ToDoList.Controllers
       return RedirectToAction("Index");
     }
 
-    public ActionResult AddCategory(int id)
+    // AddCategory is updated to find the user and the item that matches the user id, then is routed based on that result. 
+    [Authorize]
+    public async Task<ActionResult> AddCategory(int id)
     {
-      var thisItem = _db.Items.FirstOrDefault(item => item.ItemId == id);
+      var userId = this.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+      var currentUser = await _userManager.FindByIdAsync(userId);
+      Item thisItem = _db.Items
+          .Where(entry => entry.User.Id == currentUser.Id)
+          .FirstOrDefault(item => item.ItemId == id);
+      if (thisItem == null)
+      {
+        return RedirectToAction("Details", new {id = id});
+      }
       ViewBag.CategoryId = new SelectList(_db.Categories, "CategoryId", "Name");
       return View(thisItem);
     }
@@ -93,15 +146,26 @@ namespace ToDoList.Controllers
     {
       if (CategoryId != 0)
       {
-      _db.CategoryItem.Add(new CategoryItem() { CategoryId = CategoryId, ItemId = item.ItemId });
+        _db.CategoryItem.Add(new CategoryItem() { CategoryId = CategoryId, ItemId = item.ItemId });
       }
       _db.SaveChanges();
       return RedirectToAction("Index");
     }
 
-    public ActionResult Delete(int id)
+    // Delete route is updated to find the user and the item that matches the user id, then is routed based on that result. 
+    [Authorize]
+    public async Task<ActionResult> Delete(int id)
     {
-      var thisItem = _db.Items.FirstOrDefault(item => item.ItemId == id);
+      var userId = this.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+      var currentUser = await _userManager.FindByIdAsync(userId);
+
+      Item thisItem = _db.Items
+          .Where(entry => entry.User.Id == currentUser.Id)
+          .FirstOrDefault(item => item.ItemId == id);
+      if (thisItem == null)
+      {
+        return RedirectToAction("Details", new {id = id});
+      }
       return View(thisItem);
     }
 
