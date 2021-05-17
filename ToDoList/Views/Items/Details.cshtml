@@ -2,6 +2,7 @@
   Layout = "_Layout";
 }
 
+@* @using System.Security.Claims *@
 @model ToDoList.Models.Item
 
 <h2>Item Details</h2>
@@ -19,17 +20,24 @@ else
   @foreach(var join in Model.JoinEntities)
   {
     <li>@join.Category.Name</li>
-    @using (Html.BeginForm("DeleteCategory", "Items"))
-    {
-      @Html.Hidden("joinId", @join.CategoryItemId)
-      <input type="submit" value="Delete"/>
+    @*Wrapped the 'Delete Category' ActionLink in an if statement to only show the link if the user is authenticated and the 'owner' of the item*@
+    @if (User.Identity.IsAuthenticated && ViewBag.IsCurrentUser)
+    {   
+      @using (Html.BeginForm("DeleteCategory", "Items"))
+      {
+        @Html.Hidden("joinId", @join.CategoryItemId)
+        <input type="submit" value="Delete"/>
+      }
     }
   }
   </ul>
 }
 
-<p>@Html.ActionLink("Add a Category", "AddCategory", new { id = Model.ItemId })</p>
-
 <p>@Html.ActionLink("Back to list", "Index")</p>
-<p>@Html.ActionLink("Edit Item", "Edit", new { id = Model.ItemId })</p>
-<p>@Html.ActionLink("Delete Item", "Delete", new { id = Model.ItemId })</p>
+@*Wrapped the Create, Update and Delete ActionLinks in an if statement to only show the link if the user is authenticated and the 'owner' of the item*@
+@if (User.Identity.IsAuthenticated && ViewBag.IsCurrentUser)
+{
+  <p>@Html.ActionLink("Edit Item", "Edit", new { id = Model.ItemId })</p>
+  <p>@Html.ActionLink("Add a Category", "AddCategory", new { id = Model.ItemId })</p>
+  <p>@Html.ActionLink("Delete Item", "Delete", new { id = Model.ItemId })</p>
+}
