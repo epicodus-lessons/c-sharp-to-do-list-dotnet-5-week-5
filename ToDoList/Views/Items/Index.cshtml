@@ -3,9 +3,10 @@
 }
 
 @using ToDoList.Models;
+@using System.Security.Claims
 @model IEnumerable<ToDoList.Models.Item>
 
-<h1>Items for @User.Identity.Name</h1>
+<h1>Welcome @User.Identity.Name</h1>
 
 @if (Model.Any())
 {
@@ -21,6 +22,9 @@ else
   <h3>No items have been added yet!</h3>
 }
 
-<p>@Html.ActionLink("Add new item", "Create")</p>
-
+@*Wrapped the 'Add New Item' ActionLink in an if statement to only show the link if the user is authenticated*@
+@if (User.Identity.IsAuthenticated)
+{
+  <p>@Html.ActionLink("Add new item", "Create")</p>
+}
 <p>@Html.ActionLink("Home", "Index", "Home")</p>
